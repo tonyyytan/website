@@ -54,7 +54,7 @@ const toast = (msg, ms = 2600) => {
 
 // 1. hello to anyone who opens devtools
 console.log(
-  "%c tony tan %c\n\nhey, you opened devtools. respect.\nthis page runs on 0 gpus, which honestly feels wrong.\ntry the konami code, or type 'gpu', 'cpu', or 'sudo' on the page.\n",
+  "%c tony tan %c\n\nhey, you opened devtools. respect.\nthis page runs on 0 gpus, which honestly feels wrong.\nclick my name for a list of easter eggs.\n",
   "background:#c2410c;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px",
   "color:inherit"
 );
@@ -77,31 +77,140 @@ if (dot) {
   });
 }
 
-// 4. konami code → overclock mode
-const konami = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
-let kIdx = 0;
-
-// 5. secret words typed anywhere
+// 4. secret words typed anywhere
 let typed = "";
 const words = {
   gpu: () => toast("🟩 launched 1,048,576 threads… done in 0.3 ms"),
   cpu: () => { toast("🐢 cpu is thinking…", 3200); setTimeout(() => toast("🐢 …done. sequentially."), 3300); },
   sudo: () => toast("tony is not in the sudoers file. this incident will be reported."),
   hire: () => toast("📬 tan.tony207@gmail.com, i reply fast", 4000),
+  smi: () => openSmi(),
 };
 
 document.addEventListener("keydown", (e) => {
   if (e.target.closest("input, textarea")) return;
-
-  kIdx = e.key === konami[kIdx] || e.key.toLowerCase() === konami[kIdx] ? kIdx + 1 : (e.key === konami[0] ? 1 : 0);
-  if (kIdx === konami.length) {
-    kIdx = 0;
-    const on = document.documentElement.classList.toggle("oc");
-    toast(on ? "⚡ overclocked: core clock boosted to 9.9 ghz" : "back to stock clocks. warranty restored.");
-  }
 
   if (e.key.length === 1) {
     typed = (typed + e.key.toLowerCase()).slice(-10);
     for (const w in words) if (typed.endsWith(w)) { words[w](); typed = ""; }
   }
 });
+
+// 5. nvidia-smi for the website (type "smi" or click "0 gpus harmed")
+const startedAt = Date.now();
+let smiTimer = null;
+
+const pad = (v, n) => String(v).padEnd(n).slice(0, n);
+const lpad = (v, n) => String(v).padStart(n).slice(-n);
+
+function smiText() {
+  const secs = (Date.now() - startedAt) / 1000;
+  const temp = Math.min(34 + Math.floor(secs / 6), 87);
+  const throttled = temp >= 85;
+  const doc = document.documentElement;
+  const scrollable = doc.scrollHeight - innerHeight;
+  const util = scrollable > 0 ? Math.round((scrollY / scrollable) * 100) : 100;
+  const pwr = Math.round(18 + util * 3.2 + (secs % 7));
+  const kb = (document.getElementById("weight")?.textContent || "5 kb").replace(" kb", "");
+  const mem = Math.max(1, Math.round(parseFloat(kb) / 1024 * 100) / 100 || 1);
+  const now = new Date().toString().split(" (")[0];
+  const W = 61;
+  const line = (s) => "| " + pad(s, W - 4) + " |";
+  const bar = "+" + "-".repeat(W - 2) + "+";
+  const sep = "|" + "=".repeat(W - 2) + "|";
+  return [
+    now,
+    bar,
+    line("TONY-SMI 1.0    Driver: tonytan.dev    CUDA: 0 (sadly)"),
+    sep,
+    line("GPU  Name          Temp   Perf  Pwr:Usage/Cap      Util"),
+    line(` 0   tonytan.dev   ${lpad(temp, 3)}C   ${throttled ? "P8" : "P0"}    ${lpad(pwr, 3)}W / 450W      ${lpad(util, 3)}%`),
+    line(`     Memory: ${mem} MiB / 24576 MiB   ${throttled ? "!! thermal throttling" : "fan: vibing"}`),
+    bar,
+    "",
+    bar,
+    line("Processes:"),
+    line(" PID   Name                                       Usage"),
+    sep,
+    line("  1    gpu-validation @ intel                   100%"),
+    line("  2    gpu-systems @ wat.ai                      90%"),
+    line("  3    gpus-vs-cpus.md (writing)                 12%"),
+    line("  4    sleep                                      0%"),
+    bar,
+    "",
+    "press esc or click anywhere to close",
+  ].join("\n");
+}
+
+function closeSmi() {
+  document.getElementById("smi")?.remove();
+  clearInterval(smiTimer);
+}
+
+function openSmi() {
+  if (document.getElementById("smi")) return closeSmi();
+  const wrap = document.createElement("div");
+  wrap.id = "smi";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-label", "nvidia-smi");
+  const pre = document.createElement("pre");
+  wrap.appendChild(pre);
+  document.body.appendChild(wrap);
+  const draw = () => { pre.textContent = "$ nvidia-smi\n" + smiText(); };
+  draw();
+  smiTimer = setInterval(draw, 500);
+  wrap.addEventListener("click", closeSmi);
+}
+
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSmi(); });
+document.getElementById("smi-open")?.addEventListener("click", openSmi);
+
+// 6. view counter (cloudflare pages function + kv; hidden if unavailable)
+(async () => {
+  const el = document.getElementById("views");
+  if (!el) return;
+  const path = location.pathname;
+  let counted = false;
+  try { counted = sessionStorage.getItem("seen:" + path) === "1"; } catch (e) {}
+  try {
+    const res = await fetch("/api/views?path=" + encodeURIComponent(path), { method: counted ? "GET" : "POST" });
+    if (!res.ok) return;
+    const { views } = await res.json();
+    if (typeof views !== "number") return;
+    try { sessionStorage.setItem("seen:" + path, "1"); } catch (e) {}
+    const isPost = document.body.classList.contains("post");
+    el.textContent = isPost ? ` · ${views.toLocaleString()} views` : ` · visitor #${views.toLocaleString()}`;
+    el.hidden = false;
+  } catch (e) {}
+})();
+
+// 7. click the name (on the homepage) for a list of easter eggs
+const nameEl = document.querySelector(".name");
+if (nameEl && location.pathname === "/") {
+  const menu = document.createElement("div");
+  menu.id = "eggs";
+  menu.hidden = true;
+  menu.innerHTML = `
+    <p class="eggs-title">🥚 easter eggs</p>
+    <ul>
+      <li>type <kbd>smi</kbd> or tap "0 gpus harmed"</li>
+      <li>type <kbd>gpu</kbd>, <kbd>cpu</kbd>, <kbd>sudo</kbd>, or <kbd>hire</kbd></li>
+      <li>poke the green dot</li>
+      <li>switch tabs, then come back</li>
+      <li>open devtools</li>
+    </ul>`;
+  nameEl.closest("header").appendChild(menu);
+  nameEl.setAttribute("aria-expanded", "false");
+  nameEl.addEventListener("click", (e) => {
+    e.preventDefault();
+    menu.hidden = !menu.hidden;
+    nameEl.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && e.target !== nameEl) {
+      menu.hidden = true;
+      nameEl.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") menu.hidden = true; });
+}

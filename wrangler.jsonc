@@ -1,0 +1,12 @@
+{
+  "name": "website",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-11-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    { "binding": "VIEWS", "id": "8ad5b5100e4b44ec96e92043cbb293af" }
+  ]
+}
