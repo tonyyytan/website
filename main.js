@@ -54,7 +54,7 @@ const toast = (msg, ms = 2600) => {
 
 // 1. hello to anyone who opens devtools
 console.log(
-  "%c tony tan %c\n\nhey, you opened devtools. respect.\nno frameworks here, just html, css, and a little js.\ntry the konami code, or type 'gpu', 'cpu', or 'sudo' on the page.\n",
+  "%c tony tan %c\n\nhey, you opened devtools. respect.\nthis page runs on 0 gpus, which honestly feels wrong.\ntry the konami code, or type 'gpu', 'cpu', or 'sudo' on the page.\n",
   "background:#c2410c;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px",
   "color:inherit"
 );
