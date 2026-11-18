@@ -34,3 +34,74 @@ window.addEventListener("load", () => {
     if (l && ms) l.textContent = ms + " ms";
   }, 0);
 });
+
+/* ───────────── easter eggs ───────────── */
+
+// toast helper
+const toast = (msg, ms = 2600) => {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.setAttribute("role", "status");
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), ms);
+};
+
+// 1. hello to anyone who opens devtools
+console.log(
+  "%c tony tan %c\n\nhey, you opened devtools. respect.\nno frameworks here, just html, css, and a little js.\ntry the konami code, or type 'gpu', 'cpu', or 'sudo' on the page.\n",
+  "background:#c2410c;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px",
+  "color:inherit"
+);
+
+// 2. tab title when you leave
+const realTitle = document.title;
+document.addEventListener("visibilitychange", () => {
+  document.title = document.hidden ? "come back, the gpus miss you 👀" : realTitle;
+});
+
+// 3. poke the status dot
+const dot = document.querySelector(".dot");
+if (dot) {
+  let pokes = 0;
+  const lines = ["hey", "that tickles", "stop poking the dot", "ok fine, it's validated ✅", "thermal throttling…"];
+  dot.style.cursor = "pointer";
+  dot.addEventListener("click", () => {
+    toast(lines[Math.min(pokes, lines.length - 1)]);
+    pokes++;
+  });
+}
+
+// 4. konami code → overclock mode
+const konami = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+let kIdx = 0;
+
+// 5. secret words typed anywhere
+let typed = "";
+const words = {
+  gpu: () => toast("🟩 launched 1,048,576 threads… done in 0.3 ms"),
+  cpu: () => { toast("🐢 cpu is thinking…", 3200); setTimeout(() => toast("🐢 …done. sequentially."), 3300); },
+  sudo: () => toast("tony is not in the sudoers file. this incident will be reported."),
+  hire: () => toast("📬 tan.tony207@gmail.com, i reply fast", 4000),
+};
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea")) return;
+
+  kIdx = e.key === konami[kIdx] || e.key.toLowerCase() === konami[kIdx] ? kIdx + 1 : (e.key === konami[0] ? 1 : 0);
+  if (kIdx === konami.length) {
+    kIdx = 0;
+    const on = document.documentElement.classList.toggle("oc");
+    toast(on ? "⚡ overclocked: core clock boosted to 9.9 ghz" : "back to stock clocks. warranty restored.");
+  }
+
+  if (e.key.length === 1) {
+    typed = (typed + e.key.toLowerCase()).slice(-10);
+    for (const w in words) if (typed.endsWith(w)) { words[w](); typed = ""; }
+  }
+});
