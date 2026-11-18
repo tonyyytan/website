@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tony tan</title>
+  <meta name="description" content="tony tan — computer engineering @ university of waterloo">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+  <script>
+    // apply saved theme before paint to avoid a flash
+    try {
+      const t = localStorage.getItem("theme");
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <main>
+    <header>
+      <a class="name" href="/">tony tan</a>
+      <nav>
+        <a href="/" aria-current="page">about</a>
+        <a href="/writing/">writing</a>
+        <button id="theme" aria-label="toggle dark mode">◐</button>
+      </nav>
+    </header>
+
+    <p class="status">
+      <span class="dot"></span>
+      waterloo, on · <span id="clock">--:--</span>
+    </p>
+
+    <p class="intro">
+      hi! i study computer engineering at the
+      <a class="org" href="https://uwaterloo.ca"><img src="https://www.google.com/s2/favicons?domain=uwaterloo.ca&sz=32" alt="">university of waterloo</a>.
+      i like making ai models run fast on gpus.
+    </p>
+
+    <section>
+      <h2>currently</h2>
+      <ul>
+        <li>
+          <span class="arrow">↳</span>
+          <div>
+            gpu validation engineer @ <a class="org" href="https://www.intel.com"><img src="https://www.google.com/s2/favicons?domain=intel.com&sz=32" alt="">intel</a>
+            <p class="desc">working on crescent island ai inference cards.</p>
+          </div>
+        </li>
+        <li>
+          <span class="arrow">↳</span>
+          <div>
+            gpu systems engineer @ <a class="org" href="https://watai.ca"><img src="https://www.google.com/s2/favicons?domain=watai.ca&sz=32" alt="">wat.ai</a>
+            <p class="desc">building a gpu scheduling layer for adaptive-compute inference in dots.tts.</p>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>projects</h2>
+      <ul>
+        <li>
+          <span class="arrow">↳</span>
+          <div>
+            <a href="https://github.com/tonyyytan">memory-bound llm inference</a>
+            <p class="desc">hand-written int8 cuda kernels that beat cublas on skinny shapes, plus a
+              <a href="https://github.com/ggml-org/llama.cpp/issues/27425">llama.cpp issue</a> that sped up prefill 1.5×.</p>
+          </div>
+        </li>
+        <li>
+          <span class="arrow">↳</span>
+          <div>
+            <a href="https://github.com/tonyyytan">cue</a>
+            <span class="note">(hack the north 2026)</span>
+            <p class="desc">live talking points in a quest 3 headset, ~3s end to end.</p>
+          </div>
+        </li>
+        <li>
+          <span class="arrow">↳</span>
+          <div>
+            <a href="https://github.com/tonyyytan">ifyshop</a>
+            <span class="note">(cxc 2026 winner)</span>
+            <p class="desc">multi-agent shopping research and scam detection with langgraph.</p>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+
+    <footer>
+      <div class="links">
+        <a href="https://github.com/tonyyytan">github ↗</a>
+        <a href="https://www.linkedin.com/in/tony-tan-65167328a">linkedin ↗</a>
+        <a href="mailto:tan.tony207@gmail.com">email ↗</a>
+      </div>
+      <p class="stats" id="stats">
+        <span id="weight">-- kb</span> · loaded in <span id="load">-- ms</span> · 0 frameworks · 1 human
+      </p>
+      <div class="meta">
+        <span>© 2026 tony tan · made by hand</span>
+        <!-- uw webring: swap in the real widget once you join (github.com/JusGu/uwatering) -->
+        <span class="ring"><a href="#" aria-label="previous site">←</a> uw webring <a href="#" aria-label="next site">→</a></span>
+      </div>
+    </footer>
+  </main>
+
+  <script src="/main.js"></script>
+</body>
+</html>

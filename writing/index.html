@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>writing · tony tan</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+  <script>
+    try {
+      const t = localStorage.getItem("theme");
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <main>
+    <header>
+      <a class="name" href="/">tony tan</a>
+      <nav>
+        <a href="/">about</a>
+        <a href="/writing/" aria-current="page">writing</a>
+        <button id="theme" aria-label="toggle dark mode">◐</button>
+      </nav>
+    </header>
+
+    <section>
+      <h2>writing</h2>
+      <ul class="posts">
+        <li><time>2026-11-18</time> <a href="#">hello, world</a></li>
+        <li><time>2026-10-02</time> <a href="#">a post title goes here</a></li>
+      </ul>
+    </section>
+
+    <footer>
+      <div class="meta">
+        <span>© 2026 tony tan</span>
+        <a href="/">← back home</a>
+      </div>
+    </footer>
+  </main>
+  <script src="/main.js"></script>
+</body>
+</html>
