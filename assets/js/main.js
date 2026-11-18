@@ -96,7 +96,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// 5. nvidia-smi for the website (type "smi" or click "0 gpus harmed")
+// 5. nvidia-smi for the website (type "smi")
 const startedAt = Date.now();
 let smiTimer = null;
 
@@ -193,7 +193,7 @@ if (nameEl && location.pathname === "/") {
   menu.innerHTML = `
     <p class="eggs-title">🥚 easter eggs</p>
     <ul>
-      <li>type <kbd>smi</kbd> or tap "0 gpus harmed"</li>
+      <li>type <kbd>smi</kbd></li>
       <li>type <kbd>gpu</kbd>, <kbd>cpu</kbd>, <kbd>sudo</kbd>, or <kbd>hire</kbd></li>
       <li>poke the green dot</li>
       <li>switch tabs, then come back</li>
