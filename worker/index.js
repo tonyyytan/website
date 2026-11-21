@@ -1,7 +1,7 @@
 // GET/POST /api/views?path=/some/page/
 // GET returns the count, POST increments it. Needs a KV namespace bound as VIEWS.
 
-const ALLOWED = new Set(["/", "/writing/", "/writing/gpu-vs-cpu/"]);
+const ALLOWED = new Set(["/", "/writing/", "/writing/gpu-vs-cpu/", "/writing/gpu-vs-cpu-programming/", "/writing/ml-compilers/"]);
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {

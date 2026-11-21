@@ -4,3 +4,11 @@ wrangler.jsonc
 worker
 README.md
 node_modules
+.gitignore
+.wrangler
+.dev.vars*
+.env*
+.claude
+# not published yet
+writing/gpu-vs-cpu-programming
+writing/ml-compilers

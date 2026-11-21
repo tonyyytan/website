@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>gpus vs cpus · tony tan</title>
-  <meta name="description" content="an architecture overview of gpus vs cpus, and where they're headed. in progress.">
+  <title>GPUs vs. CPUs, part 1 · tony tan</title>
+  <meta name="description" content="what CPUs and GPUs are actually built from, and why the same parts lead to completely different designs.">
   <link rel="canonical" href="https://tonytan.dev/writing/gpu-vs-cpu/">
   <meta name="theme-color" content="#fdfdfc" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
@@ -15,19 +15,24 @@
   <link rel="manifest" href="/site.webmanifest">
 
   <meta property="og:type" content="article">
+  <meta property="article:modified_time" content="2026-11-21">
   <meta property="og:site_name" content="tony tan">
-  <meta property="og:title" content="gpus vs cpus: an architecture overview &amp; lookahead">
-  <meta property="og:description" content="an architecture overview of gpus vs cpus, and where they're headed. in progress.">
+  <meta property="og:title" content="GPUs vs. CPUs, part 1: the hardware">
+  <meta property="og:description" content="what CPUs and GPUs are actually built from, and why the same parts lead to completely different designs.">
   <meta property="og:url" content="https://tonytan.dev/writing/gpu-vs-cpu/">
   <meta property="og:image" content="https://tonytan.dev/assets/img/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="tony tan — gpu validation @ intel">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="gpus vs cpus: an architecture overview &amp; lookahead">
-  <meta name="twitter:description" content="an architecture overview of gpus vs cpus, and where they're headed. in progress.">
+  <meta name="twitter:title" content="GPUs vs. CPUs, part 1: the hardware">
+  <meta name="twitter:description" content="what CPUs and GPUs are actually built from, and why the same parts lead to completely different designs.">
   <meta name="twitter:image" content="https://tonytan.dev/assets/img/og.png">
   <link rel="stylesheet" href="/assets/css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.querySelector('.prose'), {delimiters: [{left: '$$', right: '$$', display: true}, {left: '\\(', right: '\\)', display: false}]})"></script>
   <script>
     try {
       const t = localStorage.getItem("theme");
@@ -47,10 +52,386 @@
     </header>
 
     <article>
-      <h1 class="post-title">gpus vs cpus: an architecture overview &amp; lookahead</h1>
-      <p class="post-meta">in progress · check back soon<span id="views" hidden></span></p>
+      <h1 class="post-title">GPUs vs. CPUs, part 1: the hardware</h1>
+      <p class="post-meta"><span id="read-time" hidden></span>in progress · last updated <time datetime="2026-11-21">nov 21, 2026</time><span id="views" hidden></span></p>
       <div class="prose">
-        <p>still being written. the gpu is rendering it, the cpu is proofreading it.</p>
+        <h2>TL;DR</h2>
+
+        <ul>
+          <li>CPUs and GPUs are built from the same parts: ALUs, registers, pipelines and caches. What differs is the philosophy.</li>
+          <li>A <b>CPU</b> is built to make <b>one thread fast</b>. Pipelining, branch prediction, out-of-order execution and big automatic caches all exist so simple, sequential code runs quickly.</li>
+          <li>A <b>GPU</b> is built to keep <b>thousands of threads busy</b>. It groups threads into warps of 32, hides memory latency by switching between warps instead of predicting, and trades cache for enormous memory bandwidth.</li>
+          <li>That's the <b>latency vs. throughput</b> split: CPUs minimize how long one task takes, GPUs maximize how much work finishes per second.</li>
+          <li>Most of the hype right now is about <b>AI inference</b>. Generating tokens one at a time (decode) is mostly limited by memory bandwidth, not math. That's why bandwidth, low-precision formats and tensor cores matter so much.</li>
+          <li>The catch: a GPU only delivers if you manage all those threads and feed them data well. That's part 2 (coming soon).</li>
+        </ul>
+
+        <h2>0. Where I'm coming from</h2>
+
+        <h3>0.1 What I'm learning in ECE222</h3>
+
+        <p>This term I'm taking ECE222 (Digital Computers) at Waterloo, my first real computer architecture course! It starts at binary arithmetic and the RISC-V instruction set, works up through assembly, linking and I/O, then builds a processor: the datapath, the control unit, and pipelining. It finishes with memory, from SRAM and DRAM up to caches and virtual memory. I'll walk through the parts that matter for this post in the CPU section below.</p>
+
+        <h3>0.2 Same parts, different philosophy</h3>
+
+        <p>"A GPU is just a CPU with thousands of cores, right?"</p>
+
+        <p>That's the analogy everyone uses: a CPU is a handful of expert workers, and a GPU is a warehouse full of people who can each do one simple thing. Honestly, I think it's a very accurate picture. The catch is that actually managing a thousand workers adds a lot more layers than the analogy lets on.</p>
+
+        <img src="/assets/img/posts/gpu-warehouse.png" width="1260" height="1008" loading="lazy" alt="Comic: a GPU drawn as a warehouse of thousands of stick-figure workers on conveyor belts. A boss on a tower shouts &quot;Everybody... add!&quot;, warp bosses lead each row, one worker says &quot;Uh, mine says multiply??&quot;, and a long line waits at a single door labelled Memory. Caption: managing 10,000 workers is easy, you just need a few layers of management, one door to the warehouse, and zero independent thought.">
+
+        <p>On a CPU, the hardware does most of that managing for you. Out-of-order execution, branch prediction and caches all exist so you can write code as if there's only one worker. On a GPU, a lot of that job comes back to you. Threads run in groups that execute in lockstep, so if half of them take a different branch, the other half wait. Memory is only fast if neighbouring threads read neighbouring addresses. Data that threads share has to be staged by hand in on-chip memory. None of these are new hardware ideas. They're the same caches, pipelines and registers, but the GPU exposes them to the programmer instead of hiding them.</p>
+
+        <p>So yes, it's the same parts. ALUs, registers, pipelines and memory are all things you'd recognize from a computer architecture course. But the philosophy is flipped. A CPU spends its transistors making one worker as fast as possible. A GPU spends them on more workers and trusts you to manage them.</p>
+
+        <aside class="note-box"><b>Technical note for nerds:</b> the "group of threads executing in lockstep" is a warp (32 threads on NVIDIA GPUs). So the analogy really should be "a thousand workers, organized into teams of 32 who all have to do the same step at the same time." That one detail changes how you write almost everything.</aside>
+
+        <h3>0.3 Why it matters</h3>
+
+        <p>A personal note: I think this makes GPU programming a much bigger jump to start. To write fast GPU code, you have to know the hardware. And most people, me included, come in having already learned to think like a CPU programmer, so a lot of the early work is unlearning habits that were perfectly fine before.</p>
+
+        <p>The tooling makes the gap wider. On the CPU side, there are dozens of languages that abstract the hardware away completely. You can write Python, Java or Rust your whole career without thinking about a pipeline, and the same C code compiles for x86 and ARM. On the GPU side, most people never write a kernel at all. They use PyTorch, which calls into libraries the vendors wrote. But once you need a custom kernel, the friendliest options are tile-level languages like Triton or Pallas, which are also the closest thing to portable GPU code. But the code that really has to be fast is still mostly written close to the metal, in each vendor's own stack: CUDA for NVIDIA, HIP and ROCm for AMD, Metal for Apple, and for Intel, open standards like SYCL and oneAPI. Unlike CPU code, GPU code often doesn't move between vendors for free.</p>
+
+        <p>So why spend a whole post on this now? Because more and more of the world's computing is moving onto GPUs and other accelerators, and a growing share of it is AI inference: running trained models for real users, all day, every day. Training a model happens once. Serving it never stops, so every bit of efficiency turns directly into cost. And since far fewer people understand how GPUs actually work than CPUs, it's a skill that's both useful and rare.</p>
+
+        <p>That doesn't make CPUs obsolete. They still run the operating system, feed data to the GPU, and handle all the branchy, unpredictable logic that GPUs are bad at. The interesting question isn't which one wins. It's understanding what each one is built for, so you know where your code should run.</p>
+
+        <p>If you've taken a computer architecture course and wondered where GPUs fit in, this post is for you. Let's start with the CPU.</p>
+
+        <h2>1. What is a CPU?</h2>
+
+        <h3>1.1 The datapath</h3>
+
+        <p>Every instruction a CPU runs goes through the same five steps:</p>
+
+        <ol>
+          <li><b>Fetch:</b> read the instruction from memory, at the address in the program counter (PC).</li>
+          <li><b>Decode:</b> figure out what the instruction is and read the registers it needs.</li>
+          <li><b>Execute:</b> do the actual work in the ALU (add, compare, compute an address).</li>
+          <li><b>Memory:</b> read or write data memory, if it's a load or store.</li>
+          <li><b>Write back:</b> put the result into a register.</li>
+        </ol>
+
+        <p>The hardware that does this is the datapath: the PC, instruction memory, the register file, the ALU and data memory, with multiplexers steering data between them. The control unit reads each instruction's opcode and flips the right switches.</p>
+
+        <img src="/assets/img/posts/cpu-datapath.png" width="1800" height="1000" loading="lazy" alt="Single-cycle datapath: the PC feeds instruction memory, the opcode goes to the control unit, operands are read from the register file into the ALU, then data memory, with a write-back path to the registers. Stages labelled fetch, decode/read registers, execute, memory, write back. One instruction per clock cycle, so the clock must be as slow as the slowest instruction.">
+
+        <p>The simplest version does all five steps in one clock cycle. It works, but the clock has to be slow enough for the slowest instruction, so every simple add waits as long as a load. Honestly, this diagram is where computers stopped feeling like magic to me. It's just a few boxes and wires, and everything else in this section is about making it faster without changing what it does.</p>
+
+        <p>Keep this picture in mind, because a GPU core is built from the same basic pieces. It just has far fewer of the clever extras built around them.</p>
+
+        <h3>1.2 Instructions, assembly, and the ISA</h3>
+
+        <p>The instruction set architecture (ISA) is the contract between software and hardware: the list of instructions a chip promises to understand. In ECE222 that's RISC-V:</p>
+
+        <ul>
+          <li>A <b>load/store architecture</b>: arithmetic only happens between registers, and memory is only touched by explicit loads and stores.</li>
+          <li><b>32 registers</b>, and every instruction is exactly <b>32 bits</b>.</li>
+          <li>A handful of instruction formats, which keeps decoding simple.</li>
+        </ul>
+
+        <p>So a line of C like <code>a = b + c;</code> becomes something like:</p>
+
+        <pre><code>lw   t0, 0(s1)     # load b
+lw   t1, 4(s1)     # load c
+add  t2, t0, t1    # a = b + c
+sw   t2, 8(s1)     # store a</code></pre>
+
+        <p>Because the ISA is a stable contract, the same compiled program keeps running on newer chips for years. There are two big philosophies:</p>
+
+        <ul>
+          <li><b>CISC</b> (x86, from Intel and AMD): complex, variable-length instructions.</li>
+          <li><b>RISC</b> (ARM, RISC-V): simple, fixed-length instructions.</li>
+        </ul>
+
+        <p>The funny part is that modern x86 chips break their complex instructions into simpler RISC-like micro-ops internally, so in a way RISC won anyway.</p>
+
+        <p>GPUs have ISAs too, but they're mostly hidden. NVIDIA, for example, compiles to PTX, a virtual ISA, and the driver translates it into the real machine code (SASS), which changes from one GPU generation to the next. Almost nobody writes GPU assembly by hand, and you can't count on it staying the same.</p>
+
+        <h3>1.3 Pipelining</h3>
+
+        <p>The analogy my ECE222 course uses is laundry. Doing one load means washing, drying, folding, and putting away. If you wait for one load to be completely done before starting the next, the washer sits idle most of the time. Pipelining is just starting the next load in the washer as soon as the first one moves to the dryer. No single load gets done faster, but you finish way more loads per hour.</p>
+
+        <aside class="note-box"><b>Latency vs. throughput:</b> these two words come up for the rest of this post. <b>Latency</b> is how long one load of laundry takes, start to finish. <b>Throughput</b> is how many loads you finish per hour. Pipelining improves throughput without improving latency. Keep this split in mind: CPUs fight hard for low latency, and GPUs give up latency to get massive throughput.</aside>
+
+        <p>A CPU does the same thing with instructions: each of the five steps becomes a stage, and a different instruction sits in each stage at once.</p>
+
+        <img src="/assets/img/posts/cpu-pipelining.png" width="1454" height="840" loading="lazy" alt="Pipeline diagram: five instructions overlapping across the IF, ID, EX, MEM and WB stages over nine cycles, with all five stages busy in cycle 5. Throughput goes up to one instruction per cycle while latency stays five steps. Below: structural, data and control hazards with their fixes, and the equation time = instruction count × CPI × clock period.">
+
+        <p>The catch is hazards, situations where the next instruction can't safely go ahead:</p>
+
+        <ul>
+          <li><b>Structural hazard:</b> two instructions need the same hardware in the same cycle. Fix: duplicate the hardware, or stall.</li>
+          <li><b>Data hazard:</b> an instruction needs a result that isn't ready yet. Fix: forward it straight from where it was computed, or stall.</li>
+          <li><b>Control hazard:</b> a branch, where the CPU doesn't know which instruction comes next. Fix: stall, or predict (next section).</li>
+        </ul>
+
+        <p>It all feeds into one equation:</p>
+
+        <div class="math">$$\text{Time} = \text{Instruction count} \times \text{CPI} \times \text{Clock period}$$</div>
+
+        <p>Pipelining shortens the clock period and aims for a CPI (cycles per instruction) of 1. Every hazard that causes a stall pushes the CPI back up.</p>
+
+        <p>GPUs pipeline too, but they handle hazards very differently. Instead of forwarding results or guessing at branches, a GPU keeps many groups of threads ready and simply switches to another group while one waits. It's a laundromat with so many customers that nobody minds if one load is stuck.</p>
+
+        <h3>1.4 Branch prediction</h3>
+
+        <p>Control hazards get expensive as pipelines get deeper, because by the time a branch resolves, the CPU has already started several instructions behind it. So instead of waiting, the CPU guesses:</p>
+
+        <ul>
+          <li>A branch predictor remembers how each branch behaved recently. Loops usually keep looping, and error checks usually don't fire.</li>
+          <li>The CPU speculatively runs down the predicted path.</li>
+          <li>If the guess was wrong, it throws that work away and starts again from the right place.</li>
+        </ul>
+
+        <p>Modern predictors are right the vast majority of the time on typical code, which is why an <code>if</code> statement on a CPU is almost free. I think this is one of the most underrated ideas in the whole course: the hardware is quietly betting on your code's behaviour, billions of times a second, and almost always winning.</p>
+
+        <p>Remember that, because on a GPU it isn't free. GPUs generally don't predict branches, and when threads in the same group disagree about which way to go, they have to take turns. More on that in part 2.</p>
+
+        <h3>1.5 Out-of-order and superscalar execution</h3>
+
+        <p>Pipelining gets you to roughly one instruction per cycle. Modern CPUs go further:</p>
+
+        <ul>
+          <li><b>Superscalar:</b> issue several instructions per cycle instead of one.</li>
+          <li><b>Out-of-order:</b> run whichever instructions have their inputs ready, instead of strictly following program order.</li>
+          <li><b>Register renaming:</b> remove false dependencies, where two instructions only conflict because they happen to reuse the same register name.</li>
+          <li><b>Reorder buffer:</b> commit results in the original order, so the program still looks sequential.</li>
+        </ul>
+
+        <p>This machinery is a big part of why a modern CPU core is so large and power-hungry. A lot of its area and energy goes into scheduling and bookkeeping rather than the arithmetic itself, all to find parallelism inside a single thread that the programmer never wrote down.</p>
+
+        <p>A GPU makes the opposite bet: it skips most of this and asks the programmer to write the parallelism out explicitly. Personally, I think that's the single biggest difference between the two, more than core counts or clock speeds.</p>
+
+        <h3>1.6 Caches and memory</h3>
+
+        <p>Here's the problem all those tricks run into: memory is slow. A register is about a cycle away, while main memory is hundreds of cycles away. Part of the reason is physics. ECE240 was easily the hardest course of my 2A term, but it's where it clicked for me that memory speed isn't really a design choice. It's a consequence of how the circuits physically work. Thank god most of us get to work at a much higher level than that. Still, it helps to know there are two main kinds of memory:</p>
+
+        <ul>
+          <li><b>SRAM</b> stores each bit with about <b>six transistors</b> wired as a tiny latch. It holds its value as long as it has power, and it's very fast. But six transistors per bit takes up a lot of chip area, so it's expensive. That's what caches are made of.</li>
+          <li><b>DRAM</b> stores each bit as charge on a tiny <b>capacitor</b>, with one transistor to access it. That makes it far denser and cheaper per bit. But capacitors leak, so DRAM has to be constantly refreshed, and reading it is slower. That's what main memory is made of.</li>
+        </ul>
+
+        <p>What I love about this is that the whole memory hierarchy falls out of that one tradeoff. Fast memory is expensive, so you can only afford a little of it close to the core, and cheap memory is slow, so you keep the bulk of your data further away.</p>
+
+        <p>Caches bridge the gap by keeping recently used data close to the core. They work because of locality:</p>
+
+        <ul>
+          <li><b>Temporal locality:</b> data you just used is likely to be used again soon.</li>
+          <li><b>Spatial locality:</b> data next to what you just used is likely to be used next. Memory moves in cache lines, typically 64 bytes, so touching <code>a[0]</code> in an array of 8-byte numbers also brings in <code>a[1]</code> through <code>a[7]</code> for free.</li>
+        </ul>
+
+        <img src="/assets/img/posts/cpu-caches.png" width="1800" height="1000" loading="lazy" alt="Memory hierarchy: registers about 1 cycle, L1 about 4, L2 about 12, L3 about 40, DRAM about 250 cycles, with the caches managed automatically by hardware. A 64-byte cache line where the first access misses and the next seven hit. Locality: temporal and spatial. AMAT = hit time + miss rate × miss penalty, for example 1 + 5% × 100 = 6 cycles.">
+
+        <p>The number to care about is the average memory access time:</p>
+
+        <div class="math">$$\text{AMAT} = \text{Hit time} + \text{Miss rate} \times \text{Miss penalty}$$</div>
+
+        <p>For example, with a 1-cycle hit time, a 5% miss rate and a 100-cycle miss penalty:</p>
+
+        <div class="math">$$1 + 0.05 \times 100 = 6 \text{ cycles}$$</div>
+
+        <p>So a miss rate of just 5% makes the average access six times slower. And on a CPU, all of this is automatic: the hardware decides what to keep and what to evict, and you never manage it directly.</p>
+
+        <p>Caches are brilliant when you reuse data. The part of ML inference we usually think of, generating text one token at a time (called decode), mostly doesn't. Generating each new token means reading essentially every weight in the model, and those weights are far bigger than any cache. The data gets used once and moves on, so the speed limit becomes how fast you can stream data from memory, not how fast you can do math. That's the first hint of why decode is memory-bound.</p>
+
+        <p>It also explains a lot about GPU memory. The HBM on a modern GPU is still DRAM, with the same capacitors. GPUs don't make each access dramatically faster. They stack the DRAM right next to the chip and make the connection enormously wide, so far more data flows per second. That rate, measured in bytes per second, is called <b>memory bandwidth</b>, and it'll matter a lot in part 2.</p>
+
+        <h3>1.7 Multicore and SIMD: how much parallelism a CPU has</h3>
+
+        <p>CPUs aren't purely sequential. A modern chip has two kinds of parallelism:</p>
+
+        <ul>
+          <li><b>Multiple cores</b>, each running its own thread (a thread is just an independent stream of instructions) with its own private caches.</li>
+          <li><b>SIMD (vector) units</b> in each core, like AVX on x86 and NEON on ARM. One SIMD instruction applies the same operation to a short vector of numbers at once, say 8 or 16 floats.</li>
+        </ul>
+
+        <p>Put together, a desktop CPU can do hundreds of arithmetic operations per cycle across all its cores. That's real parallelism, and well-written CPU code uses it. But it's layered on top of a design built for one fast thread. A GPU starts from the other end: thousands of lanes running the same instruction isn't an extension, it's the entire design.</p>
+
+        <h3>1.8 The takeaway: CPUs spend their transistors on one fast thread</h3>
+
+        <p>Step back and look at 1.3 to 1.6. Pipelining, branch prediction, out-of-order execution and caches all exist for the same reason: to make a single stream of instructions run as fast as possible, and to hide how slow memory is from the programmer. That's where a CPU spends its transistors.</p>
+
+        <aside class="note-box"><b>The takeaway:</b> a CPU is built to make one thread fast. Most of its complexity is there so you can write simple, sequential code and still get good performance.</aside>
+
+        <aside class="note-box"><b>Not covered here:</b> simultaneous multithreading, prefetching, the power wall, virtual memory, cache coherence, and deeper real-world pipelines. Worth exploring if you're curious.</aside>
+
+        <p>Now imagine taking all those transistors and spending them on more ALUs instead. Drop most of the prediction and reordering, give each core far less cache, and pack thousands of simple cores onto the chip. That's a GPU.</p>
+
+        <h2>2. What is a GPU?</h2>
+
+        <aside class="note-box"><b>Full disclosure:</b> I haven't taken a parallel hardware course at Waterloo yet. What follows is what I believe are the most important ideas, taught the way I'd want a course to teach them. The good news is that section 1 already did most of the work, so almost everything here is a comparison against something you've already seen.</aside>
+
+        <h3>2.1 From graphics to general purpose</h3>
+
+        <p>GPUs were built for one job: drawing images. And drawing an image is about the most parallel problem there is:</p>
+
+        <ul>
+          <li>A frame has millions of pixels.</li>
+          <li>Each pixel's colour is computed with the same math as every other pixel.</li>
+          <li>No pixel needs to wait for any other pixel.</li>
+        </ul>
+
+        <p>So graphics hardware was designed around running the same small program on huge amounts of data at once. In the early 2000s those programs (shaders) became programmable, and people started sneaking non-graphics math into them by pretending their data was pixels. NVIDIA's CUDA, released in 2007, made that official: write general-purpose code, run it on the GPU.</p>
+
+        <p>This history explains almost every design decision that follows. A CPU was designed for code where parallelism is hard to find. A GPU was designed for a problem where parallelism is free.</p>
+
+        <h3>2.2 The building block: streaming multiprocessors</h3>
+
+        <p class="compare">↔ compare with 1.1, the datapath</p>
+
+        <p>A GPU isn't one giant processor. It's made of many identical blocks called <b>streaming multiprocessors</b> (SMs), and a big GPU has a hundred or more of them. Each SM contains:</p>
+
+        <ul>
+          <li><b>Lots of simple ALUs</b> (lanes), often called CUDA cores. They do the actual math.</li>
+          <li><b>Warp schedulers</b> that decide which group of threads runs next.</li>
+          <li><b>A huge register file</b>, much bigger than a CPU core's, for reasons we'll see in 2.4.</li>
+          <li><b>Shared memory</b>, a small, fast on-chip memory the programmer controls directly.</li>
+          <li><b>Tensor cores</b>, specialized matrix-math units (2.6).</li>
+        </ul>
+
+        <img src="/assets/img/posts/gpu-sm.svg" width="1800" height="1040" loading="lazy" alt="One streaming multiprocessor, drawn like a datapath: a scheduler sends the same instruction over a dashed control line to every lane; a shared register file feeds a row of ALUs (times 32 lanes), and each ALU reads and writes shared memory, which is fast, on-chip and managed by the programmer.">
+
+        <p>Compare this with the datapath from 1.1. The pieces are the same: registers, ALUs, control, memory. The difference is the ratio. A CPU core has one control unit feeding a few ALUs. An SM has a handful of schedulers (four on recent NVIDIA GPUs), each feeding 32 lanes that all do the same instruction at once. The diagram shows one of them. Zoom out to the whole chip and the difference is obvious:</p>
+
+        <img src="/assets/img/posts/gpu-die-area.svg" width="1800" height="980" loading="lazy" alt="Where the transistors go. The CPU is mostly a large control block and a large cache with four ALU blocks. The GPU is a thin control strip, a grid of fifty small ALU blocks, and a thin cache. Caption: CPU area goes to control and cache, GPU area goes to ALUs.">
+
+        <p>Every vendor names these things differently, which is honestly half the battle when you start reading docs:</p>
+
+        <table>
+          <thead><tr><th></th><th>NVIDIA</th><th>AMD</th><th>Intel</th></tr></thead>
+          <tbody>
+            <tr><td>Building block</td><td>Streaming multiprocessor (SM)</td><td>Compute unit (CU)</td><td>Xe-core</td></tr>
+            <tr><td>Group of threads in lockstep</td><td>Warp (32)</td><td>Wavefront (64 or 32)</td><td>Sub-group (8 to 32)</td></tr>
+            <tr><td>Programmer-managed memory</td><td>Shared memory</td><td>Local data share (LDS)</td><td>Shared local memory (SLM)</td></tr>
+            <tr><td>Matrix units</td><td>Tensor cores</td><td>Matrix cores</td><td>XMX engines</td></tr>
+          </tbody>
+        </table>
+
+        <p>Since NVIDIA is by far the most dominant GPU vendor, its names are the ones you'll run into most, so I'll use them (SMs, warps, shared memory) for the rest of the post.</p>
+
+        <h3>2.3 Warps and SIMT: one instruction, many threads</h3>
+
+        <p class="compare">↔ compare with 1.7, SIMD</p>
+
+        <p>Threads on a GPU don't run individually. They're grouped into <b>warps</b> of 32, and every thread in a warp executes the same instruction at the same time, each on its own data. NVIDIA calls this <b>SIMT</b>: single instruction, multiple threads.</p>
+
+        <p>If that sounds like the SIMD units from 1.7, it should. Underneath, it's the same idea. The difference is in how you program it:</p>
+
+        <ul>
+          <li><b>CPU SIMD:</b> you (or the compiler) write explicit vector instructions that operate on 8 or 16 values at once.</li>
+          <li><b>GPU SIMT:</b> you write normal code for <i>one</i> thread, and the hardware runs 32 copies of it in lockstep.</li>
+        </ul>
+
+        <p>SIMT is a really nice illusion. Each thread looks independent, has its own registers, and can even take its own branches. But it's still an illusion, and part 2 covers what happens when threads in a warp disagree about which way to go.</p>
+
+        <h3>2.4 Hiding latency: switch, don't predict</h3>
+
+        <p class="compare">↔ compare with 1.3 to 1.5, pipelining, branch prediction, out-of-order</p>
+
+        <p>This is the part that made GPUs click for me. Remember everything a CPU does to avoid waiting: forwarding, branch prediction, out-of-order execution, big caches. A GPU does almost none of it. Each warp runs its instructions in order, and when it has to wait for memory, it just waits.</p>
+
+        <p>The trick is that an SM keeps <b>many warps resident at once</b>, often dozens. Every cycle, the warp scheduler picks any warp that's ready to go and runs it. While one warp waits hundreds of cycles for memory, others fill the gap:</p>
+
+        <img src="/assets/img/posts/gpu-warp-switching.svg" width="1800" height="800" loading="lazy" alt="Pipeline-style chart of four warps over twelve cycles. Each warp runs for two cycles, then waits on memory for several cycles, staggered so a different warp is running every cycle. A dashed box highlights cycles 3 and 4, where warp 0 waits while warp 1 runs. Notes on the right: latency up, each warp waits; throughput up, ALUs never idle.">
+
+        <p>Switching warps is free, and this is why the register file is so big. Every resident warp keeps all its registers on-chip the whole time, so there's nothing to save or restore. On a CPU, switching threads means the operating system saving and reloading state, which takes thousands of cycles.</p>
+
+        <p>This is the latency vs. throughput split from 1.3 in its purest form. Any single thread on a GPU is slow, with high latency. But the chip is almost never idle, so throughput is enormous. It's the laundromat again: so many customers that nobody minds if one load is stuck.</p>
+
+        <aside class="note-box"><b>Occupancy:</b> how many warps an SM can keep resident is called occupancy. It's limited by how many registers and how much shared memory each thread uses. Use too many registers per thread, and fewer warps fit, so there's less work to switch to while waiting. This tradeoff comes up constantly when tuning GPU code.</aside>
+
+        <h3>2.5 Memory: bandwidth over latency</h3>
+
+        <p class="compare">↔ compare with 1.6, caches and memory</p>
+
+        <p>GPU memory follows the same philosophy. It trades latency for bandwidth:</p>
+
+        <ul>
+          <li><b>HBM (high-bandwidth memory):</b> still DRAM, with the same capacitors from 1.6, stacked right next to the GPU with a very wide connection. As of November 2026, a high-end data-center GPU has dozens of times more memory bandwidth than a typical desktop CPU.</li>
+          <li><b>Latency is not better.</b> A single access to GPU memory takes hundreds of cycles, similar to or worse than a CPU. The GPU just hides it with warp switching instead of avoiding it.</li>
+          <li><b>Much less cache per thread.</b> There's an L2 cache shared by the whole chip and a small L1 per SM, but split across thousands of threads, each one gets very little.</li>
+          <li><b>Shared memory is a cache you manage yourself.</b> Instead of hoping the hardware keeps the right data close, you explicitly load a tile of data into shared memory, let a group of threads reuse it, and then move on.</li>
+        </ul>
+
+        <p>That last point is the biggest change in mindset. On a CPU, caches are automatic and you mostly ignore them. On a GPU, deciding what goes into shared memory and when is a huge part of writing fast code. It's the "management" from section 0.2 made concrete.</p>
+
+        <p>And remember the inference punchline from 1.6: generating each token reads every weight once, with almost no reuse. That's why memory bandwidth, not raw compute, is usually the speed limit for decode, and why so much of part 2 is about memory.</p>
+
+        <h3>2.6 Tensor cores and low-precision math</h3>
+
+        <p>Most of ML comes down to one operation: multiplying matrices. So modern GPUs have dedicated hardware for it. A <b>tensor core</b> computes a small matrix multiply-accumulate (multiply two small tiles of numbers and add the result into a third) as a single operation, instead of one multiply at a time.</p>
+
+        <p>They go hand in hand with lower-precision numbers:</p>
+
+        <ul>
+          <li><b>FP32</b> (32-bit float) has long been the default for ML.</li>
+          <li><b>FP16 and BF16</b> (16-bit) are standard for ML today.</li>
+          <li><b>FP8 and INT8</b> (8-bit), and even 4-bit formats on the newest chips, are increasingly used for inference.</li>
+        </ul>
+
+        <p>Halving the number of bits roughly doubles how much math the tensor cores can do per cycle, and halves how many bytes you have to move through memory. Since decode is memory-bound, that second part matters just as much as the first. This connects back to the binary arithmetic from ECE222: it's the same sign, exponent and mantissa idea, just with fewer bits.</p>
+
+        <p>My opinion: modern data-center GPUs are really matrix machines that also happen to run general code. The latest hype is all about AI inference, and the newest chips are being designed around it. Since inference is mostly matrix multiplies, that means more tensor cores, support for ever-lower precisions, and more memory bandwidth to feed them. On the newest chips, the vast majority of the advertised compute comes from tensor cores, not the regular ALUs. The "general-purpose" part of the GPU is starting to feel like the supporting act.</p>
+
+        <h3>2.7 The takeaway: GPUs spend their transistors on throughput</h3>
+
+        <p class="compare">↔ compare with 1.8</p>
+
+        <p>Put 2.2 to 2.6 side by side with section 1, and the two philosophies are clear:</p>
+
+        <ul>
+          <li>Where a CPU <b>predicts and reorders</b> to keep one thread moving, a GPU <b>switches</b> between thousands of threads.</li>
+          <li>Where a CPU has <b>big automatic caches</b>, a GPU has <b>huge bandwidth</b> and a small cache you manage yourself.</li>
+          <li>Where a CPU spends area on <b>control</b>, a GPU spends it on <b>ALUs and tensor cores</b>.</li>
+        </ul>
+
+        <aside class="note-box"><b>The takeaway:</b> a GPU is built to keep thousands of threads busy. Any single thread is slow, but the chip as a whole does an enormous amount of work per second, as long as you give it enough parallel work and feed it data fast enough.</aside>
+
+        <aside class="note-box"><b>Not covered here:</b> how thread blocks get scheduled onto SMs, L1/L2 cache details, multi-GPU interconnects like NVLink, graphics hardware like ray tracing units, and how designs change between generations. Worth exploring if you're curious.</aside>
+
+        <p>That last condition is the catch, and it's what part 2 is all about. But first: what do people actually use all this throughput for?</p>
+
+        <h2>3. What GPUs are used for (and why everyone only talks about inference)</h2>
+
+        <p>Graphics is where GPUs started, but it's far from the only thing they're used for today. Anything that does the same math on lots of data is a good fit:</p>
+
+        <ul>
+          <li><b>Graphics and gaming:</b> still the original job, from rendering frames to ray tracing.</li>
+          <li><b>Video:</b> encoding, decoding and editing, often on dedicated hardware inside the GPU.</li>
+          <li><b>Scientific computing and HPC:</b> weather and climate models, molecular dynamics, fluid simulation. Most of the world's ten fastest supercomputers are built around GPUs.</li>
+          <li><b>Simulation:</b> physics engines, robotics, and training environments for self-driving cars.</li>
+          <li><b>Data processing:</b> GPU-accelerated databases and dataframe libraries that chew through huge tables.</li>
+          <li><b>Crypto mining:</b> a big driver of GPU demand for a while, though it has mostly faded.</li>
+          <li><b>ML training:</b> teaching a model by running huge batches of data through it, over and over, for weeks.</li>
+          <li><b>ML inference:</b> running a trained model to actually answer requests.</li>
+        </ul>
+
+        <p>All of these are real, and GPUs are great at every one of them. But if you read anything about GPUs today, it's almost all about the last one.</p>
+
+        <img src="/assets/img/posts/gpu-uses-money.png" width="1350" height="765" loading="lazy" alt="Comic: stick figures holding signs for gaming (the OG), video, weather and climate, physics sims and databases look sad and say &quot;We were here first!!&quot;, while crypto lies retired on the ground. Training stands next to a huge pile of cash saying &quot;I got some!&quot;, and a dump truck labelled &quot;All the money&quot; pours cash onto a pile labelled Inference. Caption: training happens once, inference never stops, guess where the money goes.">
+
+        <h3>3.1 Why inference gets all the attention</h3>
+
+        <p>It mostly comes down to money and scale:</p>
+
+        <ul>
+          <li><b>Training happens once, inference never stops.</b> A model gets trained for a few weeks or months, then served to users every second of every day for as long as it's in use.</li>
+          <li><b>It scales with users.</b> Every message, search and generated image is another inference request. The more people use AI, the more inference there is.</li>
+          <li><b>So it's where the cost is.</b> Every bit of efficiency, whether it's more tokens per second, fewer GPUs or less power, turns directly into money saved.</li>
+        </ul>
+
+        <p>And inference cares about different things than training does:</p>
+
+        <ul>
+          <li><b>Latency:</b> a user is waiting, so how quickly the first word appears and how fast the rest streams in actually matters.</li>
+          <li><b>Memory bandwidth:</b> as we saw in 1.6, generating each token reads every weight in the model, so decode is usually limited by memory, not math.</li>
+          <li><b>Cost per token:</b> the number everyone is trying to push down.</li>
+        </ul>
+
+        <p>That's why there's now a whole wave of chips built specifically for inference, and why lower-precision formats like FP8 and INT8 have become such a big deal. My take: GPUs were the right tool for training, almost by accident, because training looks a lot like graphics. Inference is driving a whole wave of hardware designed around AI from the ground up, and I think that's what makes this such an interesting time to be learning this stuff.</p>
+
+        <p class="next-part">Next: part 2, programming them (coming soon).</p>
       </div>
     </article>
 

@@ -214,3 +214,80 @@ if (nameEl && location.pathname === "/") {
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") menu.hidden = true; });
 }
+
+// 8. reading time on blog posts (~230 words per minute, counted from the post body)
+const readEl = document.getElementById("read-time");
+const prose = document.querySelector(".prose");
+if (readEl && prose) {
+  const words = (prose.innerText.match(/\S+/g) || []).length;
+  if (words > 150) {
+    readEl.textContent = `${Math.max(1, Math.round(words / 230))} min read · `;
+    readEl.hidden = false;
+  }
+}
+
+// 9. table of contents on blog posts: numbered, nested, highlights the section you're reading
+if (prose) {
+  const heads = [...prose.querySelectorAll("h2, h3")];
+  if (heads.length >= 3) {
+    const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const toc = document.createElement("details");
+    toc.className = "toc";
+    toc.open = matchMedia("(min-width: 1200px)").matches;
+    const sections = heads.filter((h) => h.tagName === "H2").length;
+    toc.innerHTML = `<summary>on this page <span>${sections} sections</span></summary><div class="toc-progress"><i></i></div>`;
+    const root = document.createElement("ol");
+    const links = [];
+    let parent = null;
+    for (const h of heads) {
+      if (!h.id) h.id = slug(h.textContent);
+      const m = h.textContent.match(/^(\d+(?:\.\d+)?)\.?\s+(.*)$/);
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = "#" + h.id;
+      a.innerHTML = m ? `<span class="toc-num">${m[1]}</span>${m[2]}` : h.textContent;
+      li.appendChild(a);
+      links.push({ h, li, a });
+      if (h.tagName === "H2") {
+        root.appendChild(li);
+        parent = li;
+      } else if (parent) {
+        let sub = parent.querySelector("ol");
+        if (!sub) { sub = document.createElement("ol"); parent.appendChild(sub); }
+        sub.appendChild(li);
+      } else {
+        root.appendChild(li);
+      }
+    }
+    toc.appendChild(root);
+
+    // on wide screens the toc is a fixed sidebar, so it lives directly in <body>
+    // (an animated ancestor would otherwise trap position: fixed)
+    const wide = matchMedia("(min-width: 1200px)");
+    const place = () => {
+      if (wide.matches) { document.body.appendChild(toc); toc.open = true; }
+      else prose.before(toc);
+    };
+    place();
+    wide.addEventListener("change", place);
+
+    // highlight the current section while scrolling
+    const update = () => {
+      let cur = links[0];
+      for (const l of links) if (l.h.getBoundingClientRect().top < 140) cur = l;
+      for (const l of links) l.li.classList.remove("active", "current");
+      cur.li.classList.add("current");
+      const top = cur.h.tagName === "H2" ? cur.li : cur.li.parentElement.closest("li");
+      if (top) top.classList.add("active");
+    };
+    const bar = toc.querySelector(".toc-progress i");
+    const progress = () => {
+      const r = prose.getBoundingClientRect();
+      const pct = Math.min(1, Math.max(0, (innerHeight * 0.4 - r.top) / r.height));
+      bar.style.width = (pct * 100).toFixed(1) + "%";
+    };
+    addEventListener("scroll", () => { update(); progress(); }, { passive: true });
+    update();
+    progress();
+  }
+}

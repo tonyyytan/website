@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPUs vs. CPUs, part 2 · tony tan</title>
+  <meta name="description" content="how writing code for a GPU differs from a CPU: kernels, warps, memory layout, and why most ML workloads are memory-bound.">
+  <link rel="canonical" href="https://tonytan.dev/writing/gpu-vs-cpu-programming/">
+  <meta name="theme-color" content="#fdfdfc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <meta property="og:type" content="article">
+  <meta property="article:modified_time" content="2026-11-21">
+  <meta property="og:site_name" content="tony tan">
+  <meta property="og:title" content="GPUs vs. CPUs, part 2: programming them">
+  <meta property="og:description" content="how writing code for a GPU differs from a CPU: kernels, warps, memory layout, and why most ML workloads are memory-bound.">
+  <meta property="og:url" content="https://tonytan.dev/writing/gpu-vs-cpu-programming/">
+  <meta property="og:image" content="https://tonytan.dev/assets/img/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="tony tan — gpu validation @ intel">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="GPUs vs. CPUs, part 2: programming them">
+  <meta name="twitter:description" content="how writing code for a GPU differs from a CPU: kernels, warps, memory layout, and why most ML workloads are memory-bound.">
+  <meta name="twitter:image" content="https://tonytan.dev/assets/img/og.png">
+  <link rel="stylesheet" href="/assets/css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.querySelector('.prose'), {delimiters: [{left: '$$', right: '$$', display: true}, {left: '\\(', right: '\\)', display: false}]})"></script>
+  <script>
+    try {
+      const t = localStorage.getItem("theme");
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body class="post">
+  <main>
+    <header>
+      <a class="name" href="/">tony tan</a>
+      <nav>
+        <a href="/">about</a>
+        <a href="/writing/" aria-current="page">writing</a>
+        <button id="theme" aria-label="toggle dark mode">◐</button>
+      </nav>
+    </header>
+
+    <article>
+      <h1 class="post-title">GPUs vs. CPUs, part 2: programming them</h1>
+      <p class="post-meta"><span id="read-time" hidden></span>outline · in progress · last updated <time datetime="2026-11-21">nov 21, 2026</time><span id="views" hidden></span></p>
+      <div class="prose">
+        <p>This is part 2. <a href="/writing/gpu-vs-cpu/">Part 1</a> covered the hardware: what a CPU is built from, what a GPU is built from, and why the same parts lead to two completely different philosophies. This part is about what that means when you actually sit down and write code for each one.</p>
+
+        <h2>TL;DR</h2>
+
+        <h2>1. How they run code</h2>
+
+        <h3>1.1 Writing code for a CPU</h3>
+
+        <h3>1.2 Writing code for a GPU: grids, blocks, and threads</h3>
+
+        <h3>1.3 Warps, SIMT, and branch divergence</h3>
+
+        <h3>1.4 Example: the same kernel on both</h3>
+
+        <h2>2. Memory</h2>
+
+        <h3>2.1 The CPU memory hierarchy</h3>
+
+        <h3>2.2 The GPU memory hierarchy</h3>
+
+        <h3>2.3 Memory layout: row-major vs. column-major, AoS vs. SoA</h3>
+
+        <h3>2.4 Coalesced access and bank conflicts</h3>
+
+        <h3>2.5 Tiling: making matmul fit in shared memory</h3>
+
+        <h3>2.6 Why most ML workloads are memory-bound</h3>
+
+        <h2>3. Lookahead</h2>
+
+        <h2>4. What this post doesn't cover (yet)</h2>
+
+        <p class="next-part"><a href="/writing/gpu-vs-cpu/">← part 1, the hardware</a></p>
+      </div>
+    </article>
+
+    <footer>
+      <div class="meta">
+        <span>© 2026 tony tan</span>
+        <a href="/writing/">← all writing</a>
+      </div>
+    </footer>
+  </main>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
